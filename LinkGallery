@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Link Gallery</title>
+
+  <!-- ============================================================
+    CONFIGURATION — edit these two values:
+    1. SHEET_URL  →  your published Apps Script Web App URL
+    2. PAGE_TITLE →  the heading shown on your gallery page
+  ============================================================ -->
+  <script>
+    const SHEET_URL  = "https://script.google.com/macros/s/AKfycbxLiTkssX6NScktABQ8unhUR2CLYABdKx49nde78crm-ZpQGK8f5h5SWk8CeKkKUb-e/exec";
+    const PAGE_TITLE = "My Link Gallery";
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:        #0e0e10;
+      --surface:   #18181c;
+      --surface2:  #222228;
+      --border:    rgba(255,255,255,0.08);
+      --border-h:  rgba(255,255,255,0.18);
+      --text:      #f0ede8;
+      --muted:     #9d9b96;
+      --accent:    #e8d5a3;
+      --accent2:   #c9b07a;
+      --radius:    14px;
+      --card-w:    340px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "DM Sans", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 6rem;
+    }
+
+    /* ── header ── */
+    header {
+      padding: 4rem 2rem 2.5rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(232,213,163,0.06) 0%, transparent 100%);
+    }
+    header h1 {
+      font-family: "DM Serif Display", serif;
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    header p {
+      font-size: 0.95rem;
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    /* ── loading / error states ── */
+    #status {
+      text-align: center;
+      padding: 5rem 2rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    #status .spinner {
+      width: 28px; height: 28px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── grid ── */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+      gap: 1.5rem;
+      max-width: 1200px;
+      margin: 3rem auto 0;
+      padding: 0 1.5rem;
+    }
+
+    /* ── card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+    .card:hover {
+      border-color: var(--border-h);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    }
+    .card:active { transform: translateY(0); }
+
+    /* preview iframe wrapper */
+    .card-preview {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: var(--surface2);
+      position: relative;
+      overflow: hidden;
+    }
+    .card-preview iframe {
+      width: 200%;
+      height: 200%;
+      border: none;
+      transform: scale(0.5);
+      transform-origin: top left;
+      pointer-events: none;
+      display: block;
+    }
+    /* fallback favicon shown when iframe can't load */
+    .card-preview .fallback {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .card-preview .fallback img {
+      width: 40px; height: 40px;
+      border-radius: 8px;
+      background: var(--surface2);
+    }
+    .card-preview .fallback span {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* overlay shimmer during load */
+    .card-preview::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s infinite;
+    }
+    .card-preview.loaded::after { display: none; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* card body */
+    .card-body {
+      padding: 1rem 1.1rem 1.2rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .card-domain {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent2);
+      font-weight: 500;
+    }
+    .card-title {
+      font-family: "DM Serif Display", serif;
+      font-size: 1.05rem;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.35;
+    }
+    .card-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 0.2rem;
+      font-weight: 300;
+    }
+
+    /* arrow badge */
+    .card-arrow {
+      position: absolute;
+      top: 12px; right: 12px;
+      width: 28px; height: 28px;
+      background: rgba(232,213,163,0.12);
+      border: 1px solid rgba(232,213,163,0.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      color: var(--accent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .card:hover .card-arrow { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1 id="page-heading">Link Gallery</h1>
+    <p>Click any card to visit the site</p>
+  </header>
+
+  <div id="status">
+    <div class="spinner"></div>
+    Loading your links&hellip;
+  </div>
+
+  <div id="grid" style="display:none;"></div>
+
+  <script>
+    document.getElementById("page-heading").textContent = PAGE_TITLE;
+    document.title = PAGE_TITLE;
+
+    function getDomain(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ""); }
+      catch { return url; }
+    }
+
+    function buildCard(link) {
+      const domain = getDomain(link.url);
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+      const a = document.createElement("a");
+      a.className = "card";
+      a.href = link.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+
+      a.innerHTML = `
+        <div class="card-preview" id="preview-wrap-${Math.random().toString(36).slice(2)}">
+          <iframe
+            src="${link.url}"
+            title="Preview of ${domain}"
+            loading="lazy"
+            sandbox="allow-scripts allow-same-origin"
+          ></iframe>
+          <div class="fallback">
+            <img src="${faviconUrl}" alt="${domain} icon" />
+            <span>${domain}</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-domain">${domain}</div>
+          <div class="card-title">${link.title || domain}</div>
+          ${link.description ? `<div class="card-desc">${link.description}</div>` : ""}
+        </div>
+        <div class="card-arrow">↗</div>
+      `;
+
+      // Handle iframes that are blocked from embedding
+      const iframe = a.querySelector("iframe");
+      const previewWrap = a.querySelector(".card-preview");
+      const fallback = a.querySelector(".fallback");
+
+      iframe.addEventListener("load", () => {
+        previewWrap.classList.add("loaded");
+      });
+      iframe.addEventListener("error", () => {
+        iframe.style.display = "none";
+        fallback.style.display = "flex";
+        previewWrap.classList.add("loaded");
+      });
+
+      // Many sites block iframe embedding via X-Frame-Options.
+      // After 4s, if no load event fired, show favicon fallback.
+      setTimeout(() => {
+        if (!previewWrap.classList.contains("loaded")) {
+          iframe.style.display = "none";
+          fallback.style.display = "flex";
+          previewWrap.classList.add("loaded");
+        }
+      }, 4000);
+
+      return a;
+    }
+
+    async function loadLinks() {
+      const statusEl = document.getElementById("status");
+      const gridEl   = document.getElementById("grid");
+
+      if (!SHEET_URL || SHEET_URL === "https://script.google.com/macros/s/AKfycbxLiTkssX6NScktABQ8unhUR2CLYABdKx49nde78crm-ZpQGK8f5h5SWk8CeKkKUb-e/exec") {
+        statusEl.innerHTML = `
+          <strong style="color:#e8d5a3;">⚙️ Setup needed</strong><br><br>
+          Open this file in a text editor and replace<br>
+          <code style="background:#222;padding:2px 6px;border-radius:4px;">https://script.google.com/macros/s/AKfycbxLiTkssX6NScktABQ8unhUR2CLYABdKx49nde78crm-ZpQGK8f5h5SWk8CeKkKUb-e/exec</code><br>
+          with your published Apps Script Web App URL.
+        `;
+        return;
+      }
+
+      try {
+        const res  = await fetch(SHEET_URL);
+        const data = await res.json();
+
+        if (!data.links || data.links.length === 0) {
+          statusEl.innerHTML = "No links found. Add rows to your Google Sheet.";
+          return;
+        }
+
+        statusEl.style.display = "none";
+        gridEl.style.display   = "grid";
+
+        for (const link of data.links) {
+          gridEl.appendChild(buildCard(link));
+        }
+      } catch (err) {
+        statusEl.innerHTML = `
+          <strong style="color:#f09595;">Could not load links</strong><br><br>
+          ${err.message}<br><br>
+          Make sure your Apps Script is deployed as a Web App<br>
+          and "Who has access" is set to <strong>Anyone</strong>.
+        `;
+      }
+    }
+
+    loadLinks();
+  </script>
+
+</body>
+</html>
