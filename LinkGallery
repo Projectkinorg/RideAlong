@@ -11,7 +11,7 @@
     2. PAGE_TITLE →  the heading shown on your gallery page
   ============================================================ -->
   <script>
-    const SHEET_URL  = "https://script.google.com/macros/s/AKfycbxLiTkssX6NScktABQ8unhUR2CLYABdKx49nde78crm-ZpQGK8f5h5SWk8CeKkKUb-e/exec";
+    const SHEET_URL  = "https://script.google.com/macros/s/AKfycbx2FD8wc7pxwxLXfhyKcKovTsg8meMF22aeKuXgBIozVyWzF_g067HGeiTT7nrlUk0w/exec";
     const PAGE_TITLE = "My Link Gallery";
   </script>
 
@@ -31,7 +31,7 @@
       --accent:    #e8d5a3;
       --accent2:   #c9b07a;
       --radius:    14px;
-      --card-w:    340px;
+      --card-w:    320px;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,7 +44,6 @@
       padding: 0 0 6rem;
     }
 
-    /* ── header ── */
     header {
       padding: 4rem 2rem 2.5rem;
       text-align: center;
@@ -65,12 +64,12 @@
       font-weight: 300;
     }
 
-    /* ── loading / error states ── */
     #status {
       text-align: center;
       padding: 5rem 2rem;
       color: var(--muted);
       font-size: 0.95rem;
+      line-height: 1.8;
     }
     #status .spinner {
       width: 28px; height: 28px;
@@ -82,7 +81,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── grid ── */
     #grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
@@ -113,24 +111,35 @@
     }
     .card:active { transform: translateY(0); }
 
-    /* preview iframe wrapper */
+    /* ── screenshot preview ── */
     .card-preview {
       width: 100%;
       aspect-ratio: 16/9;
       background: var(--surface2);
-      position: relative;
       overflow: hidden;
+      position: relative;
     }
-    .card-preview iframe {
-      width: 200%;
-      height: 200%;
-      border: none;
-      transform: scale(0.5);
-      transform-origin: top left;
-      pointer-events: none;
+    .card-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
       display: block;
+      transition: opacity 0.3s;
+      opacity: 0;
     }
-    /* fallback favicon shown when iframe can't load */
+    .card-preview img.loaded { opacity: 1; }
+
+    /* skeleton shimmer while screenshot loads */
+    .card-preview::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--surface2);
+    }
+    .card-preview.img-loaded::before { display: none; }
+
+    /* favicon fallback for failed screenshots */
     .card-preview .fallback {
       position: absolute;
       inset: 0;
@@ -138,31 +147,18 @@
       align-items: center;
       justify-content: center;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.6rem;
     }
     .card-preview .fallback img {
-      width: 40px; height: 40px;
+      width: 36px; height: 36px;
       border-radius: 8px;
-      background: var(--surface2);
     }
     .card-preview .fallback span {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       color: var(--muted);
     }
 
-    /* overlay shimmer during load */
-    .card-preview::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%);
-      background-size: 200% 100%;
-      animation: shimmer 1.6s infinite;
-    }
-    .card-preview.loaded::after { display: none; }
-    @keyframes shimmer { to { background-position: -200% 0; } }
-
-    /* card body */
+    /* ── card body ── */
     .card-body {
       padding: 1rem 1.1rem 1.2rem;
       flex: 1;
@@ -192,7 +188,6 @@
       font-weight: 300;
     }
 
-    /* arrow badge */
     .card-arrow {
       position: absolute;
       top: 12px; right: 12px;
@@ -232,9 +227,19 @@
       catch { return url; }
     }
 
+    // Microlink API — no key needed, returns a direct screenshot image URL
+    function screenshotUrl(url) {
+      const encoded = encodeURIComponent(url);
+      return `https://api.microlink.io/?url=${encoded}&screenshot=true&meta=false&embed=screenshot.url`;
+    }
+
+    function faviconUrl(url) {
+      const domain = getDomain(url);
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    }
+
     function buildCard(link) {
       const domain = getDomain(link.url);
-      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
       const a = document.createElement("a");
       a.className = "card";
@@ -242,16 +247,13 @@
       a.target = "_blank";
       a.rel = "noopener noreferrer";
 
+      const previewId = "p" + Math.random().toString(36).slice(2);
+
       a.innerHTML = `
-        <div class="card-preview" id="preview-wrap-${Math.random().toString(36).slice(2)}">
-          <iframe
-            src="${link.url}"
-            title="Preview of ${domain}"
-            loading="lazy"
-            sandbox="allow-scripts allow-same-origin"
-          ></iframe>
+        <div class="card-preview" id="${previewId}">
+          <img alt="Preview of ${domain}" />
           <div class="fallback">
-            <img src="${faviconUrl}" alt="${domain} icon" />
+            <img src="${faviconUrl(link.url)}" alt="${domain}" />
             <span>${domain}</span>
           </div>
         </div>
@@ -263,30 +265,29 @@
         <div class="card-arrow">↗</div>
       `;
 
-      // Handle iframes that are blocked from embedding
-      const iframe = a.querySelector("iframe");
-      const previewWrap = a.querySelector(".card-preview");
-      const fallback = a.querySelector(".fallback");
+      // Lazy-load the screenshot once the card scrolls into view
+      const previewEl = a.querySelector(".card-preview");
+      const imgEl     = a.querySelector(".card-preview > img");
+      const fallback  = a.querySelector(".fallback");
 
-      iframe.addEventListener("load", () => {
-        previewWrap.classList.add("loaded");
-      });
-      iframe.addEventListener("error", () => {
-        iframe.style.display = "none";
-        fallback.style.display = "flex";
-        previewWrap.classList.add("loaded");
-      });
+      const observer = new IntersectionObserver((entries) => {
+        if (!entries[0].isIntersecting) return;
+        observer.disconnect();
 
-      // Many sites block iframe embedding via X-Frame-Options.
-      // After 4s, if no load event fired, show favicon fallback.
-      setTimeout(() => {
-        if (!previewWrap.classList.contains("loaded")) {
-          iframe.style.display = "none";
+        imgEl.src = screenshotUrl(link.url);
+
+        imgEl.onload = () => {
+          imgEl.classList.add("loaded");
+          previewEl.classList.add("img-loaded");
+        };
+        imgEl.onerror = () => {
+          imgEl.style.display = "none";
           fallback.style.display = "flex";
-          previewWrap.classList.add("loaded");
-        }
-      }, 4000);
+          previewEl.classList.add("img-loaded");
+        };
+      }, { rootMargin: "200px" });
 
+      observer.observe(a);
       return a;
     }
 
@@ -294,11 +295,11 @@
       const statusEl = document.getElementById("status");
       const gridEl   = document.getElementById("grid");
 
-      if (!SHEET_URL || SHEET_URL === "https://script.google.com/macros/s/AKfycbxLiTkssX6NScktABQ8unhUR2CLYABdKx49nde78crm-ZpQGK8f5h5SWk8CeKkKUb-e/exec") {
+      if (!SHEET_URL || SHEET_URL === "https://script.google.com/macros/s/AKfycbx2FD8wc7pxwxLXfhyKcKovTsg8meMF22aeKuXgBIozVyWzF_g067HGeiTT7nrlUk0w/exec") {
         statusEl.innerHTML = `
           <strong style="color:#e8d5a3;">⚙️ Setup needed</strong><br><br>
           Open this file in a text editor and replace<br>
-          <code style="background:#222;padding:2px 6px;border-radius:4px;">https://script.google.com/macros/s/AKfycbxLiTkssX6NScktABQ8unhUR2CLYABdKx49nde78crm-ZpQGK8f5h5SWk8CeKkKUb-e/exec</code><br>
+          <code style="background:#222;padding:2px 6px;border-radius:4px;font-size:0.85rem;">https://script.google.com/macros/s/AKfycbx2FD8wc7pxwxLXfhyKcKovTsg8meMF22aeKuXgBIozVyWzF_g067HGeiTT7nrlUk0w/exec</code><br>
           with your published Apps Script Web App URL.
         `;
         return;
